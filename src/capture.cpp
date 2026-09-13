@@ -1,4 +1,5 @@
 #include "capture.h"
+#include "depth/depth.h"
 #include "overlay.h"
 #include "state.h"
 
@@ -105,5 +106,6 @@ void PresentLatestFrame()
     winrt::com_ptr<ID3D11Texture2D> backBuffer;
     winrt::check_hresult(g.swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), backBuffer.put_void()));
     g.context->CopyResource(backBuffer.get(), surface.get());
+    UpdateDepth(surface.get());
     winrt::check_hresult(g.swapchain->Present(0, 0));
 }

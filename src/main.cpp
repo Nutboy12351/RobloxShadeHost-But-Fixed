@@ -4,6 +4,7 @@
 
 #include "capture.h"
 #include "config.h"
+#include "depth/depth.h"
 #include "overlay.h"
 #include "roblox_window.h"
 #include "state.h"
@@ -35,6 +36,7 @@ int Run()
 
     g.frameEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     CreateDevice();
+    InitDepth();
 
     std::puts("Install ReShade on this exe (DirectX 10/11/12).\n"
               "Waiting for Roblox...");
@@ -47,7 +49,10 @@ int Run()
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
         {
             if (msg.message == WM_QUIT)
+            {
+                ShutdownDepth();
                 return 0;
+            }
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }

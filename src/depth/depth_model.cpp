@@ -1,0 +1,174 @@
+#include "depth_model.h"
+
+#include <windows.h>
+#include <DirectXPackedVector.h>
+#include <onnxruntime_c_api.h>
+
+#include <stdexcept>
+
+namespace
+{
+struct OrtError
+{
+    const OrtApi* api;
+    void operator()(OrtStatus* status) const
+    {
+        if (!status)
+            return;
+        std::string message = api->GetErrorMessage(status);
+        api->ReleaseStatus(status);
+        throw std::runtime_error(message);
+    }
+};
+
+ONNXTensorElementDataType ElementType(const OrtApi* api, OrtTypeInfo* info)
+{
+    const OrtTensorTypeAndShapeInfo* tensor = nullptr;
+    OrtError{ api }(api->CastTypeInfoToTensorInfo(info, &tensor));
+    ONNXTensorElementDataType type = ONNX_TENSOR_ELEMENT_DATA_TYPE_UNDEFINED;
+    OrtError{ api }(api->GetTensorElementType(tensor, &type));
+    api->ReleaseTypeInfo(info);
+    return type;
+}
+
+bool IsHalf(ONNXTensorElementDataType type, const char* what)
+{
+    if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16)
+        return true;
+    if (type == ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT)
+        return false;
+    throw std::runtime_error(std::string("The model ") + what + " is neither float32 nor float16.");
+}
+} // namespace
+
+DepthModel::~DepthModel()
+{
+    if (api)
+    {
+        if (session)
+            api->ReleaseSession(session);
+        if (options)
+            api->ReleaseSessionOptions(options);
+        if (memory)
+            api->ReleaseMemoryInfo(memory);
+        if (env)
+            api->ReleaseEnv(env);
+    }
+    if (library)
+        FreeLibrary(static_cast<HMODULE>(library));
+}
+
+void DepthModel::Load(const std::wstring& directory, const std::wstring& modelFile, int width, int height)
+{
+    // DirectML.dll is an import of onnxruntime.dll and resolves from the exe directory as well.
+    library = LoadLibraryW((directory + L"onnxruntime.dll").c_str());
+    if (!library)
+        throw std::runtime_error("onnxruntime.dll or DirectML.dll could not be loaded.");
+
+    using GetApiBase = const OrtApiBase*(ORT_API_CALL*)();
+    auto getApiBase = reinterpret_cast<GetApiBase>(GetProcAddress(static_cast<HMODULE>(library), "OrtGetApiBase"));
+    using AppendDml = OrtStatus*(ORT_API_CALL*)(OrtSessionOptions*, int);
+    auto appendDml = reinterpret_cast<AppendDml>(GetProcAddress(static_cast<HMODULE>(library), "OrtSessionOptionsAppendExecutionProvider_DML"));
+    if (!getApiBase || !appendDml)
+        throw std::runtime_error("onnxruntime.dll is not the DirectML build.");
+    api = getApiBase()->GetApi(ORT_API_VERSION);
+    if (!api)
+        throw std::runtime_error("onnxruntime.dll is older than the version this host was built for.");
+    const OrtError check{ api };
+
+    check(api->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "RobloxShadeHost", &env));
+    check(api->CreateSessionOptions(&options));
+    // DirectML requires sequential execution without memory patterns.
+    check(api->SetSessionExecutionMode(options, ORT_SEQUENTIAL));
+    check(api->DisableMemPattern(options));
+    check(api->SetSessionGraphOptimizationLevel(options, ORT_ENABLE_ALL));
+    // Otherwise idle worker threads spin and take CPU time from Roblox.
+    check(api->AddSessionConfigEntry(options, "session.intra_op.allow_spinning", "0"));
+    // DirectML compiles the graph for fixed shapes. Left dynamic, the model runs many times slower.
+    check(api->AddFreeDimensionOverrideByName(options, "batch_size", 1));
+    check(api->AddFreeDimensionOverrideByName(options, "height", height));
+    check(api->AddFreeDimensionOverrideByName(options, "width", width));
+    check(appendDml(options, 0));
+    check(api->CreateSession(env, (directory + modelFile).c_str(), options, &session));
+    check(api->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &memory));
+
+    OrtAllocator* allocator = nullptr;
+    check(api->GetAllocatorWithDefaultOptions(&allocator));
+    size_t inputs = 0, outputs = 0;
+    check(api->SessionGetInputCount(session, &inputs));
+    check(api->SessionGetOutputCount(session, &outputs));
+    if (inputs != 1 || outputs != 1)
+        throw std::runtime_error("The model does not take one image and return one depth map.");
+    char* name = nullptr;
+    check(api->SessionGetInputName(session, 0, allocator, &name));
+    inputName = name;
+    check(api->AllocatorFree(allocator, name));
+    check(api->SessionGetOutputName(session, 0, allocator, &name));
+    outputName = name;
+    check(api->AllocatorFree(allocator, name));
+
+    OrtTypeInfo* info = nullptr;
+    check(api->SessionGetInputTypeInfo(session, 0, &info));
+    halfInput = IsHalf(ElementType(api, info), "input");
+    check(api->SessionGetOutputTypeInfo(session, 0, &info));
+    halfOutput = IsHalf(ElementType(api, info), "output");
+}
+
+void DepthModel::Run(const std::vector<float>& input, int width, int height, std::vector<float>& output)
+{
+    using namespace DirectX::PackedVector;
+    const OrtError check{ api };
+    const size_t count = static_cast<size_t>(width) * height;
+    if (input.size() != 3 * count)
+        throw std::logic_error("Depth input size mismatch.");
+
+    const int64_t shape[4] = { 1, 3, height, width };
+    const void* data = input.data();
+    size_t bytes = input.size() * sizeof(float);
+    if (halfInput)
+    {
+        halfBuffer.resize(input.size());
+        XMConvertFloatToHalfStream(halfBuffer.data(), sizeof(HALF), input.data(), sizeof(float), input.size());
+        data = halfBuffer.data();
+        bytes = halfBuffer.size() * sizeof(HALF);
+    }
+
+    OrtValue* in = nullptr;
+    check(api->CreateTensorWithDataAsOrtValue(memory, const_cast<void*>(data), bytes, shape, 4,
+                                              halfInput ? ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT16 : ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &in));
+    OrtValue* out = nullptr;
+    const char* inNames[] = { inputName.c_str() };
+    const char* outNames[] = { outputName.c_str() };
+    OrtStatus* status = api->Run(session, nullptr, inNames, &in, 1, outNames, 1, &out);
+    api->ReleaseValue(in);
+    if (status)
+    {
+        if (out)
+            api->ReleaseValue(out);
+        check(status);
+    }
+
+    OrtTensorTypeAndShapeInfo* shapeInfo = nullptr;
+    size_t elements = 0;
+    void* result = nullptr;
+    OrtStatus* failure = api->GetTensorTypeAndShape(out, &shapeInfo);
+    if (!failure)
+    {
+        failure = api->GetTensorShapeElementCount(shapeInfo, &elements);
+        api->ReleaseTensorTypeAndShapeInfo(shapeInfo);
+    }
+    if (!failure)
+        failure = api->GetTensorMutableData(out, &result);
+    if (!failure && elements == count)
+    {
+        output.resize(count);
+        if (halfOutput)
+            XMConvertHalfToFloatStream(output.data(), sizeof(float), static_cast<const HALF*>(result), sizeof(HALF), count);
+        else
+            memcpy(output.data(), result, count * sizeof(float));
+    }
+    api->ReleaseValue(out);
+    check(failure);
+    if (elements != count)
+        throw std::runtime_error("The model returned a depth map of unexpected size.");
+}
