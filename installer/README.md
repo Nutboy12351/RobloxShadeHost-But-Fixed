@@ -1,6 +1,6 @@
 # Installer
 
-Requires Inno Setup 6. The installer includes RobloxShadeHost and offers ReShade with full add-on support, every effect package from ReShade's official list, the presets from `presets/`, and the optional DLSS5 add-on.
+Requires Inno Setup 6. The installer includes RobloxShadeHost and offers ReShade with full add-on support, every effect package from ReShade's official list, the presets from `presets/`, and the optional DLSS5 and depth estimation add-ons.
 
 After installing Inno Setup, configure and build:
 
@@ -19,13 +19,15 @@ The presets component reads `presets/downloads.ini` from the `main` branch, down
 
 The DLSS5 component reads `downloads.ini` from the `dlss5-assets` release. Both downloads must pass their SHA-256 checks before either is installed. Missing downloads, a missing or invalid manifest, or `enabled=0` skip DLSS5. The finish page reports the skipped component; the setup log records the reason. Cancelling a download stops preparation.
 
+The depth estimation component works the same way with `downloads.ini` from the `depth-assets` release, which lists `onnxruntime.dll` and `DirectML.dll` from that release and `depth-anything-v2-small.onnx` from Hugging Face. Manifest URLs must point at this repository's releases or at huggingface.co.
+
 Credits appear before component selection and are installed as `CREDITS.txt`. Removal requests go to **tiago@mouta.me**.
 
 ## Maintaining the downloads
 
-The manifest source and asset release notes are in `vendor/dlss5/`. The binaries belong in release assets, not Git. Upload updated `downloads.ini` to the same release when changing download URLs or checksums. The installer reads that release asset, so an application release is not required to update it.
+The manifest sources and asset release notes are in `vendor/dlss5/` and `vendor/depth/`. The binaries belong in release assets, not Git. Upload updated `downloads.ini` to the same release when changing download URLs or checksums. The installer reads that release asset, so an application release is not required to update it.
 
-To withdraw DLSS5, remove the two binary assets or upload a manifest with `enabled=0`. Older installers will skip it on their next run. Existing installations are not changed.
+To withdraw an add-on, remove its binary assets or upload a manifest with `enabled=0`. Older installers will skip it on their next run. Existing installations are not changed.
 
 ## Unattended installation
 
@@ -35,12 +37,12 @@ Host only:
 .\RobloxShadeHost-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /COMPONENTS="host"
 ```
 
-To install ReShade unattended, first read its license and explicitly pass `/ACCEPTRESHADELICENSE=1`. Select `host,reshade` with `/COMPONENTS`, adding `reshade\presets` for the presets and `reshade\dlss5` for DLSS5. Use `/LOG="setup.log"` to record download failures.
+To install ReShade unattended, first read its license and explicitly pass `/ACCEPTRESHADELICENSE=1`. Select `host,reshade` with `/COMPONENTS`, adding `reshade\presets` for the presets, `reshade\dlss5` for DLSS5 and `reshade\depth` for depth estimation. Use `/LOG="setup.log"` to record download failures.
 
 Uninstall removes installed binaries and the shortcut. It retains ReShade settings and files created later by the user.
 
 ## Verification
 
-Run `./tests/installer_tests.ps1` after building the host. The tests compile an installer without uninstall registration or shortcuts and install into fresh folders under `build/installer-tests`. They check component selection, license acceptance, effect and preset installation, configuration preservation, and unavailable DLSS5 downloads. Internet access is required for ReShade.
+Run `./tests/installer_tests.ps1` after building the host. The tests compile an installer without uninstall registration or shortcuts and install into fresh folders under `build/installer-tests`. They check component selection, license acceptance, effect and preset installation, configuration preservation, and unavailable DLSS5 and depth downloads. Internet access is required for ReShade.
 
-Add `-DownloadDLSS` to also download the published DLSS5 files and verify their hashes against the repository manifest.
+Add `-DownloadDLSS` or `-DownloadDepth` to also download the published add-on files and verify their hashes against the repository manifests.

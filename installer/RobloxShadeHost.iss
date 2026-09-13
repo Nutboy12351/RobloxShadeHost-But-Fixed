@@ -13,6 +13,9 @@
 #ifndef DownloadManifestUrl
   #define DownloadManifestUrl "https://github.com/OMouta/RobloxShadeHost/releases/download/dlss5-assets/downloads.ini"
 #endif
+#ifndef DepthManifestUrl
+  #define DepthManifestUrl "https://github.com/OMouta/RobloxShadeHost/releases/download/depth-assets/downloads.ini"
+#endif
 
 [Setup]
 AppId={{77125AF5-DF0A-485A-A633-E64FBD50E90C}
@@ -51,6 +54,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "host"; Description: "RobloxShadeHost (required)"; Types: recommended custom; Flags: fixed
 Name: "reshade"; Description: "ReShade with full add-on support"; Types: recommended
 Name: "reshade\dlss5"; Description: "DLSS5 add-on - RenoDX / clshortfuse and NVIDIA"; Flags: dontinheritcheck
+Name: "reshade\depth"; Description: "Depth estimation add-on - Depth Anything V2, ONNX Runtime and DirectML"; Flags: dontinheritcheck
 Name: "reshade\presets"; Description: "RobloxShadeHost presets"; Types: recommended; Flags: dontinheritcheck
 
 [Files]
@@ -65,6 +69,9 @@ Source: "{tmp}\EffectPackages.ini"; DestDir: "{app}"; Components: reshade; Flags
 Source: "{tmp}\presets\*.ini"; DestDir: "{app}\presets"; Components: reshade\presets; Flags: external onlyifdoesntexist uninsneveruninstall; Check: PresetsReady
 Source: "{tmp}\nvngx_dlssnr.dll"; DestDir: "{app}"; ExternalSize: 165840496; Components: reshade\dlss5; Flags: external ignoreversion; Check: DLSSReady
 Source: "{tmp}\renodx-dlss.addon64"; DestDir: "{app}"; ExternalSize: 2624512; Components: reshade\dlss5; Flags: external ignoreversion; Check: DLSSReady
+Source: "{tmp}\onnxruntime.dll"; DestDir: "{app}"; ExternalSize: 17328152; Components: reshade\depth; Flags: external ignoreversion; Check: DepthReady
+Source: "{tmp}\DirectML.dll"; DestDir: "{app}"; ExternalSize: 18527776; Components: reshade\depth; Flags: external ignoreversion; Check: DepthReady
+Source: "{tmp}\depth-anything-v2-small.onnx"; DestDir: "{app}"; ExternalSize: 49642442; Components: reshade\depth; Flags: external ignoreversion; Check: DepthReady
 
 [Icons]
 #ifndef TestMode
@@ -78,7 +85,7 @@ var
   LicenseMemo: TNewMemo;
   AcceptLicense: TNewCheckBox;
   ReShadeVersion, ReShadeUrl, SkippedComponents: String;
-  ReShadeInstalled, DLSSDownloaded: Boolean;
+  ReShadeInstalled, DLSSDownloaded, DepthDownloaded: Boolean;
   EffectsDownloaded, PresetsDownloaded: Boolean;
 
 function ReShadeReady: Boolean;
@@ -89,6 +96,11 @@ end;
 function DLSSReady: Boolean;
 begin
   Result := ReShadeInstalled and DLSSDownloaded;
+end;
+
+function DepthReady: Boolean;
+begin
+  Result := ReShadeInstalled and DepthDownloaded;
 end;
 
 function EffectsReady: Boolean;
@@ -224,21 +236,29 @@ begin
   ReShadeInstalled := True;
 end;
 
-procedure DownloadDLSSFile(const FileName: String);
+procedure DownloadManifestFile(const Manifest, FileName, Component: String);
 var
-  Manifest, Url, Hash: String;
+  Url, Hash: String;
   Index: Integer;
 begin
-  Manifest := ExpandConstant('{tmp}\downloads.ini');
   Url := GetIniString(FileName, 'url', '', Manifest);
   Hash := Lowercase(GetIniString(FileName, 'sha256', '', Manifest));
-  if (Pos('https://github.com/OMouta/RobloxShadeHost/releases/download/', Url) <> 1) or
-    (Length(Hash) <> 64) then
-    RaiseException('The DLSS5 download manifest is invalid.');
+  if ((Pos('https://github.com/OMouta/RobloxShadeHost/releases/download/', Url) <> 1) and
+    (Pos('https://huggingface.co/', Url) <> 1)) or (Length(Hash) <> 64) then
+    RaiseException('The ' + Component + ' download manifest is invalid.');
   for Index := 1 to Length(Hash) do
     if Pos(Hash[Index], '0123456789abcdef') = 0 then
-      RaiseException('The DLSS5 checksum is invalid.');
+      RaiseException('The ' + Component + ' checksum is invalid.');
   Download(Url, FileName, Hash);
+end;
+
+procedure SkipComponent(const Component: String);
+begin
+  Log(Component + ' skipped: ' + GetExceptionMessage);
+  if SkippedComponents <> '' then
+    SkippedComponents := SkippedComponents + ' ';
+  SkippedComponents := SkippedComponents + Component +
+    ' was skipped because its downloads were unavailable or could not be verified.';
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -246,6 +266,7 @@ begin
   Result := '';
   SkippedComponents := '';
   DLSSDownloaded := False;
+  DepthDownloaded := False;
   if not WizardIsComponentSelected('reshade') then
     exit;
   if not AcceptLicense.Checked then begin
@@ -270,17 +291,33 @@ begin
         Download('{#DownloadManifestUrl}', 'downloads.ini', '');
         if GetIniString('dlss5', 'enabled', '0', ExpandConstant('{tmp}\downloads.ini')) <> '1' then
           RaiseException('DLSS5 downloads are currently disabled.');
-        DownloadDLSSFile('nvngx_dlssnr.dll');
-        DownloadDLSSFile('renodx-dlss.addon64');
+        DownloadManifestFile(ExpandConstant('{tmp}\downloads.ini'), 'nvngx_dlssnr.dll', 'DLSS5');
+        DownloadManifestFile(ExpandConstant('{tmp}\downloads.ini'), 'renodx-dlss.addon64', 'DLSS5');
         DLSSDownloaded := True;
       except
         if DownloadPage.AbortedByUser then begin
           Result := 'The download was cancelled.';
           exit;
         end;
-        Log('DLSS5 skipped: ' + GetExceptionMessage);
-        SkippedComponents := 'DLSS5 was skipped because its downloads were unavailable or could not be verified. ' +
-          'RobloxShadeHost and ReShade were installed.';
+        SkipComponent('DLSS5');
+      end;
+    end;
+    if WizardIsComponentSelected('reshade\depth') then begin
+      try
+        DownloadPage.SetText('Downloading depth estimation', 'Downloading the optional depth estimation add-on.');
+        Download('{#DepthManifestUrl}', 'depth-downloads.ini', '');
+        if GetIniString('depth', 'enabled', '0', ExpandConstant('{tmp}\depth-downloads.ini')) <> '1' then
+          RaiseException('Depth estimation downloads are currently disabled.');
+        DownloadManifestFile(ExpandConstant('{tmp}\depth-downloads.ini'), 'onnxruntime.dll', 'Depth estimation');
+        DownloadManifestFile(ExpandConstant('{tmp}\depth-downloads.ini'), 'DirectML.dll', 'Depth estimation');
+        DownloadManifestFile(ExpandConstant('{tmp}\depth-downloads.ini'), 'depth-anything-v2-small.onnx', 'Depth estimation');
+        DepthDownloaded := True;
+      except
+        if DownloadPage.AbortedByUser then begin
+          Result := 'The download was cancelled.';
+          exit;
+        end;
+        SkipComponent('Depth estimation');
       end;
     end;
   finally
@@ -291,5 +328,5 @@ end;
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if (CurPageID = wpFinished) and (SkippedComponents <> '') then
-    WizardForm.FinishedLabel.Caption := SkippedComponents;
+    WizardForm.FinishedLabel.Caption := SkippedComponents + ' RobloxShadeHost and ReShade were installed.';
 end;
