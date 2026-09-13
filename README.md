@@ -1,8 +1,22 @@
 # RobloxShadeHost
 
-Use ReShade with Roblox by installing it on RobloxShadeHost. Download the EXE, install ReShade on it, and run it alongside Roblox.
+Use ReShade with Roblox by installing it on RobloxShadeHost, then running the host alongside Roblox.
 
 ## Download and set up
+
+Use 64-bit Windows 10 version 1903 or newer, or Windows 11. Windows Graphics Capture must be available on your system.
+
+### Installer (recommended)
+
+1. Download [**RobloxShadeHost-Setup.exe**](https://github.com/OMouta/RobloxShadeHost/releases/latest/download/RobloxShadeHost-Setup.exe).
+2. Run the installer and choose an installation folder.
+3. Keep **ReShade with full add-on support** selected. Optionally select the **DLSS5 add-on**, which requires ReShade.
+4. Accept the ReShade license and finish installation. If the DLSS5 downloads are unavailable, the installer skips them and installs the other components.
+5. Open Roblox and launch **RobloxShadeHost** from the Start menu. Either can be started first; the host waits if Roblox is not open yet.
+
+Premade presets are not included yet.
+
+### Manual installation
 
 1. Download **RobloxShadeHost.exe** from the [latest release](https://github.com/OMouta/RobloxShadeHost/releases/latest).
 2. Put it in its own folder somewhere you can write files, such as `Desktop\RobloxShadeHost`. Keep it in that folder after installing ReShade.
@@ -11,8 +25,6 @@ Use ReShade with Roblox by installing it on RobloxShadeHost. Download the EXE, i
 5. Select **Microsoft DirectX 10/11/12** as the rendering API.
 6. Select your preset if you have one, choose the effect packages you want, and finish installation.
 7. Open Roblox and run **RobloxShadeHost.exe**. Either can be started first. If Roblox is not open yet, the host waits for it.
-
-Use 64-bit Windows 10 version 1903 or newer, or Windows 11. Windows Graphics Capture must be available on your system.
 
 **Old DirectX ReShade installations, such as DirectX 9 or earlier, will not work with this host.** Choose DirectX 10/11/12 even if a guide for another program tells you otherwise. Use a current ReShade release rather than copying an old installation from another game.
 
