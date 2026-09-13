@@ -121,6 +121,8 @@ GitHub Actions builds and tests the EXE for pushes and pull requests. You can al
 
 To publish a release, push a version tag such as `v0.1.0`. After the build and tests pass, the workflow creates a GitHub release with the EXE attached. Branch pushes and manual builds do not publish releases.
 
+Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md) for bug reports, presets, and code changes.
+
 ## License
 
 [MIT](LICENSE).
