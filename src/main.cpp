@@ -20,6 +20,9 @@
 #include <chrono>
 #include <cstdio>
 #include <vector>
+#include <string>
+
+#include "hotkey.h"
 
 using namespace winrt::Windows::Graphics::Capture;
 using winrt::Windows::Foundation::Metadata::ApiInformation;
@@ -42,6 +45,9 @@ struct State
 {
     HWND overlay = nullptr;
     HWND target = nullptr;
+    HWND indicator = nullptr;
+    std::wstring inputHotkey = L"Ctrl+Home";
+    std::wstring indicatorText;
     bool editMode = false;
     bool overlayVisible = false;
     RECT overlayRect{};
@@ -58,6 +64,56 @@ struct State
     SizeInt32 poolSize{};
     HANDLE frameEvent = nullptr;
 } g;
+
+Hotkey LoadInputHotkey()
+{
+    wchar_t executable[32768]{};
+    const DWORD length = GetModuleFileNameW(nullptr, executable, static_cast<DWORD>(std::size(executable)));
+    winrt::check_bool(length && length < std::size(executable));
+    const std::wstring path = std::wstring(executable).substr(0, std::wstring(executable).find_last_of(L"\\/") + 1)
+                              + L"RobloxShadeHost.ini";
+    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+        winrt::check_bool(WritePrivateProfileStringW(L"Input", L"ToggleKey", g.inputHotkey.c_str(), path.c_str()));
+
+    wchar_t value[128]{};
+    const DWORD count = GetPrivateProfileStringW(L"Input", L"ToggleKey", L"Ctrl+Home", value, static_cast<DWORD>(std::size(value)), path.c_str());
+    Hotkey hotkey;
+    if (count == std::size(value) - 1 || !ParseHotkey(value, hotkey))
+    {
+        MessageBoxW(nullptr, L"Invalid ToggleKey in RobloxShadeHost.ini. Use a key such as Ctrl+Home or F8. See the README for supported keys.",
+                    L"RobloxShadeHost", MB_OK | MB_ICONERROR);
+        winrt::throw_hresult(E_INVALIDARG);
+    }
+    g.inputHotkey = value;
+    g.indicatorText = L"Input captured | " + g.inputHotkey + L" to return to Roblox";
+    return hotkey;
+}
+
+LRESULT CALLBACK IndicatorWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    if (message == WM_PAINT)
+    {
+        PAINTSTRUCT paint{};
+        HDC dc = BeginPaint(hwnd, &paint);
+        RECT rect{};
+        GetClientRect(hwnd, &rect);
+        HBRUSH background = CreateSolidBrush(RGB(30, 30, 30));
+        FillRect(dc, &rect, background);
+        DeleteObject(background);
+        HFONT font = CreateFontW(-MulDiv(14, GetDpiForWindow(hwnd), 96), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
+                                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                 DEFAULT_PITCH, L"Segoe UI");
+        HGDIOBJ previous = SelectObject(dc, font);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(255, 218, 128));
+        DrawTextW(dc, g.indicatorText.c_str(), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SelectObject(dc, previous);
+        DeleteObject(font);
+        EndPaint(hwnd, &paint);
+        return 0;
+    }
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
 
 HWND FindRobloxWindow()
 {
@@ -148,7 +204,12 @@ void SetEditMode(bool enabled)
     g.editMode = enabled;
     SetWindowLongPtrW(g.overlay, GWL_EXSTYLE, enabled ? kEditStyle : kPassThroughStyle);
     SetWindowPos(g.overlay, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    std::puts(enabled ? "Edit mode on. Home opens the ReShade menu, Ctrl+Home returns to Roblox." : "Edit mode off.");
+    if (!enabled)
+        ShowWindow(g.indicator, SW_HIDE);
+    if (enabled)
+        std::printf("Input captured. Use your ReShade menu key to open its menu; %ls returns to Roblox.\n", g.inputHotkey.c_str());
+    else
+        std::puts("Input returned to Roblox.");
 }
 
 void StopCapture()
@@ -176,6 +237,7 @@ void UpdateOverlay()
         if (g.overlayVisible)
             ShowWindow(g.overlay, SW_HIDE);
         g.overlayVisible = false;
+        ShowWindow(g.indicator, SW_HIDE);
         return;
     }
 
@@ -185,6 +247,16 @@ void UpdateOverlay()
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
         g.overlayRect = bounds;
         g.overlayVisible = true;
+    }
+    if (g.editMode)
+    {
+        const UINT dpi = GetDpiForWindow(g.overlay);
+        const int margin = MulDiv(12, dpi, 96);
+        const int height = MulDiv(36, dpi, 96);
+        // Keep the badge above the swapchain, without taking focus or blocking clicks.
+        const int width = std::min<int>(bounds.right - bounds.left, MulDiv(560, dpi, 96));
+        SetWindowPos(g.indicator, HWND_TOPMOST, bounds.left + (bounds.right - bounds.left - width) / 2,
+                     bounds.bottom - height - margin, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 }
 
@@ -235,6 +307,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_HOTKEY:
+        if (wParam != kEditModeHotkey)
+            break;
         if (g.editMode)
         {
             SetEditMode(false);
@@ -260,6 +334,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int Run()
 {
+    const Hotkey inputHotkey = LoadInputHotkey();
     if (!GraphicsCaptureSession::IsSupported())
     {
         std::puts("Windows Graphics Capture is not supported on this system.");
@@ -278,19 +353,30 @@ int Run()
     winrt::check_bool(g.overlay != nullptr);
     SetLayeredWindowAttributes(g.overlay, 0, 255, LWA_ALPHA);
 
-    if (!RegisterHotKey(g.overlay, kEditModeHotkey, MOD_CONTROL | MOD_NOREPEAT, VK_HOME))
+    WNDCLASSW indicatorClass{};
+    indicatorClass.lpfnWndProc = IndicatorWndProc;
+    indicatorClass.hInstance = wc.hInstance;
+    indicatorClass.lpszClassName = L"RobloxShadeHostInputIndicator";
+    winrt::check_bool(RegisterClassW(&indicatorClass));
+    g.indicator = CreateWindowExW(kPassThroughStyle, indicatorClass.lpszClassName, L"Input captured", WS_POPUP,
+                                  0, 0, 1, 1, g.overlay, nullptr, wc.hInstance, nullptr);
+    winrt::check_bool(g.indicator != nullptr);
+    winrt::check_bool(SetLayeredWindowAttributes(g.indicator, 0, 255, LWA_ALPHA));
+
+    if (!RegisterHotKey(g.overlay, kEditModeHotkey, inputHotkey.modifiers, inputHotkey.key))
     {
-        std::puts("Ctrl+Home is already registered by another program.");
+        const std::wstring error = L"Could not register " + g.inputHotkey + L". It may be reserved by Windows or in use by another program. "
+                                   L"Choose another ToggleKey in RobloxShadeHost.ini and restart.";
+        MessageBoxW(nullptr, error.c_str(), L"RobloxShadeHost", MB_OK | MB_ICONERROR);
         return 1;
     }
 
     g.frameEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     CreateDevice();
 
-    std::puts("RobloxShadeHost\n"
-              "Install ReShade on this exe (DirectX 10/11/12).\n"
-              "Ctrl+Home: edit mode, so the ReShade menu (Home) gets mouse and keyboard.\n"
+    std::puts("Install ReShade on this exe (DirectX 10/11/12).\n"
               "Waiting for Roblox...");
+    std::printf("%ls: toggle input capture. ReShade keeps its own menu and effect shortcuts.\n", g.inputHotkey.c_str());
 
     ULONGLONG nextSearch = 0;
     for (;;)
@@ -358,6 +444,13 @@ int Run()
 
 int main()
 {
+    std::puts(R"(  ____       _     _            ____  _               _      _   _           _
+ |  _ \ ___ | |__ | | _____  __/ ___|| |__   __ _  __| | ___| | | | ___  ___| |_
+ | |_) / _ \| '_ \| |/ _ \ \/ /\___ \| '_ \ / _` |/ _` |/ _ \ |_| |/ _ \/ __| __|
+ |  _ < (_) | |_) | | (_) >  <  ___) | | | | (_| | (_| |  __/  _  | (_) \__ \ |_
+ |_| \_\___/|_.__/|_|\___/_/\_\|____/|_| |_|\__,_|\__,_|\___|_| |_|\___/|___/\__|
+)");
+    std::printf("v%s\n\n", ROBLOX_SHADE_HOST_VERSION);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     try

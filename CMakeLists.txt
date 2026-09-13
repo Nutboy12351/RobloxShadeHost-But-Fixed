@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.20)
-project(RobloxShadeHost LANGUAGES CXX)
+project(RobloxShadeHost VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 add_executable(RobloxShadeHost src/main.cpp)
 target_compile_definitions(RobloxShadeHost PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_compile_definitions(RobloxShadeHost PRIVATE ROBLOX_SHADE_HOST_VERSION="${PROJECT_VERSION}")
 target_compile_options(RobloxShadeHost PRIVATE /W4 /permissive- /EHsc /bigobj)
-target_link_libraries(RobloxShadeHost PRIVATE d3d11 dxgi dwmapi windowsapp)
+target_link_libraries(RobloxShadeHost PRIVATE d3d11 dxgi dwmapi windowsapp gdi32)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(hotkey_tests tests/hotkey_tests.cpp)
+    target_compile_definitions(hotkey_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(hotkey_tests PRIVATE /W4 /permissive- /EHsc)
+    add_test(NAME hotkey_tests COMMAND hotkey_tests)
+endif()
