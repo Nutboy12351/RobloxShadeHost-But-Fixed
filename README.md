@@ -10,8 +10,8 @@ Use 64-bit Windows 10 version 1903 or newer, or Windows 11. Windows Graphics Cap
 
 1. Download [**RobloxShadeHost-Setup.exe**](https://github.com/OMouta/RobloxShadeHost/releases/latest/download/RobloxShadeHost-Setup.exe).
 2. Run the installer and choose an installation folder.
-3. Keep **ReShade with full add-on support** and **RobloxShadeHost presets** selected. Optionally select the **DLSS5 add-on**, which requires ReShade.
-4. Accept the ReShade license and finish installation. If the DLSS5 downloads are unavailable, the installer skips them and installs the other components.
+3. Keep **ReShade with full add-on support** and **RobloxShadeHost presets** selected. Optionally select the **DLSS5 add-on** and the **Depth estimation add-on**, which require ReShade.
+4. Accept the ReShade license and finish installation. If the optional downloads are unavailable, the installer skips them and installs the other components.
 5. Open Roblox and launch **RobloxShadeHost** from the Start menu. Either can be started first; the host waits if Roblox is not open yet.
 
 The installer downloads every effect package from ReShade's official list. The presets component installs the presets from this repository's `presets` folder next to the host; load one from the ReShade menu.
@@ -29,6 +29,14 @@ The installer downloads every effect package from ReShade's official list. The p
 **Old DirectX ReShade installations, such as DirectX 9 or earlier, will not work with this host.** Choose DirectX 10/11/12 even if a guide for another program tells you otherwise. Use a current ReShade release rather than copying an old installation from another game.
 
 Keep the files ReShade installs beside RobloxShadeHost.exe, including `dxgi.dll`, `ReShade.ini`, and the shader folders. ReShade is downloaded separately and is not bundled with the EXE.
+
+## Depth-based effects
+
+Roblox's depth buffer is not available outside its process, so the host estimates depth from the captured image with Depth Anything V2. Ambient occlusion, depth of field, fog and other effects that read depth then work from that estimate. Objects that look close in the image are close in the estimate, but distances are relative and edges are softer than a real depth buffer.
+
+Select the **Depth estimation add-on** in the installer. For a manual installation, put `onnxruntime.dll` and `DirectML.dll` from the [depth-assets release](https://github.com/OMouta/RobloxShadeHost/releases/tag/depth-assets) and the [model](https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/4472b7362082ad9968fee890ca0f1e5aca36b93d/onnx/model_fp16.onnx) saved as `depth-anything-v2-small.onnx` into the host folder. The add-on needs ReShade with full add-on support and a DirectX 12 capable GPU.
+
+The model shares the GPU with Roblox and costs some frame rate. If that matters more than depth effects, disable **RobloxShadeHost depth** in ReShade's Add-ons tab or delete the model file.
 
 ## Open the menu and adjust effects
 
@@ -99,7 +107,7 @@ Bring Roblox to the foreground. Check `ToggleKey` in RobloxShadeHost.ini and res
 
 ### A shader needs depth information
 
-The host receives Roblox's visible image, without its depth buffer. Effects that require game depth, such as many ambient occlusion and depth-of-field shaders, will not work as intended. Full add-on support does not add Roblox depth data.
+Install the depth estimation add-on, see [Depth-based effects](#depth-based-effects). Without it, the host only has Roblox's visible image, and effects that require depth will not work as intended. The estimate is not Roblox's own depth buffer, so effects that expect exact distances can need retuning.
 
 ### The host reports that capture is unsupported
 
