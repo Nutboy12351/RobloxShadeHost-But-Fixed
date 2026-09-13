@@ -1,6 +1,7 @@
 param(
     [string]$Compiler = "$env:LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe",
-    [switch]$DownloadDLSS
+    [switch]$DownloadDLSS,
+    [string]$PresetsBaseUrl
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +12,7 @@ New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 function Build-TestInstaller([string]$Name, [string]$ManifestUrl = '') {
     $arguments = @('/Q', '/DTestMode', "/O$testRoot", "/F$Name")
     if ($ManifestUrl) { $arguments += "/DDownloadManifestUrl=$ManifestUrl" }
+    if ($PresetsBaseUrl) { $arguments += "/DPresetsBaseUrl=$PresetsBaseUrl" }
     & $Compiler @arguments "$repo/installer/RobloxShadeHost.iss"
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
     return Join-Path $testRoot "$Name.exe"
@@ -48,19 +50,42 @@ Assert-File $hostOnly 'nvngx_dlssnr.dll' $false
 Assert-File $hostOnly 'unins000.exe' $false
 
 $null = Invoke-TestInstaller $setup 'no-license' 'host,reshade' $false
-$reshade = Invoke-TestInstaller $setup 'reshade' 'host,reshade'
+$reshade = Invoke-TestInstaller $setup 'reshade' 'host,reshade,reshade\presets'
 Assert-File $reshade 'dxgi.dll'
 Assert-File $reshade 'ReShade-LICENSE.txt'
 Assert-File $reshade 'renodx-dlss.addon64' $false
+Assert-File $reshade 'reshade-shaders/Shaders/ReShade.fxh'
+Assert-File $reshade 'reshade-shaders/Shaders/FXShaders/AdaptiveTonemapper.fx'
+Assert-File $reshade 'reshade-shaders/Shaders/qUINT/qUINT_common.fxh'
+if (-not (Get-ChildItem "$reshade/reshade-shaders/Textures" -Filter *.png -Recurse | Select-Object -First 1)) {
+    throw 'No textures were installed.'
+}
+$reshadeIni = Get-Content "$reshade/ReShade.ini" -Raw
+if ($reshadeIni -notmatch '(?m)^EffectSearchPaths=.*\.\\reshade-shaders\\Shaders\\\*\*' -or
+    $reshadeIni -notmatch '(?m)^TextureSearchPaths=.*\.\\reshade-shaders\\Textures\\\*\*') {
+    throw 'ReShade.ini is missing the effect search paths.'
+}
+if (([regex]::Matches($reshadeIni, '(?m)^\[GENERAL\]')).Count -ne 1) {
+    throw 'ReShade.ini has a duplicated GENERAL section.'
+}
+foreach ($preset in Get-ChildItem "$repo/presets/*.ini" -Exclude downloads.ini) {
+    if ((Get-FileHash "$reshade/presets/$($preset.Name)").Hash -ne (Get-FileHash $preset.FullName).Hash) {
+        throw "Installed preset $($preset.Name) does not match the repository."
+    }
+}
 if ((Get-Content "$reshade/CREDITS.txt" -Raw) -notmatch 'tiago@mouta.me') {
     throw 'Removal contact is missing from installed credits.'
 }
 
 Add-Content "$reshade/ReShade.ini" "`n[InstallerTest]`nPreserve=1"
 $originalHash = (Get-FileHash "$reshade/ReShade.ini").Hash
-$null = Invoke-TestInstaller $setup 'reshade' 'host,reshade'
+Set-Content "$reshade/presets/GenericPreset1.ini" 'Techniques=Edited@Edited.fx'
+$null = Invoke-TestInstaller $setup 'reshade' 'host,reshade,reshade\presets'
 if ((Get-FileHash "$reshade/ReShade.ini").Hash -ne $originalHash) {
     throw 'Reinstall changed the existing ReShade configuration.'
+}
+if ((Get-Content "$reshade/presets/GenericPreset1.ini" -Raw) -notmatch 'Edited') {
+    throw 'Reinstall overwrote an edited preset.'
 }
 
 $missingSetup = Build-TestInstaller 'Setup-Missing' 'https://github.com/OMouta/RobloxShadeHost/releases/download/dlss5-assets/not-present.ini'
