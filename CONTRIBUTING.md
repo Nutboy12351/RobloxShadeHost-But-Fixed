@@ -36,7 +36,7 @@ The installer needs Inno Setup 6. See `installer/README.md` for building and tes
 
 ## Code changes
 
-- The host is a single C++20 file, `src/main.cpp`, with hotkey parsing in `src/hotkey.h`. Keep it that way unless a change genuinely needs a new file.
+- The host is C++20.
 - Builds use `/W4`. Fix warnings rather than suppressing them.
 - Hotkey parsing has tests in `tests/hotkey_tests.cpp`. Add a case when you change it.
 - Installer changes must pass `tests/installer_tests.ps1`. It downloads ReShade and all effect packages, so it takes a few minutes.

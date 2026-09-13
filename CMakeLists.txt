@@ -5,7 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-add_executable(RobloxShadeHost src/main.cpp)
+add_executable(RobloxShadeHost
+    src/main.cpp
+    src/capture.cpp
+    src/config.cpp
+    src/overlay.cpp
+    src/roblox_window.cpp)
 target_compile_definitions(RobloxShadeHost PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_definitions(RobloxShadeHost PRIVATE ROBLOX_SHADE_HOST_VERSION="${PROJECT_VERSION}")
 target_compile_options(RobloxShadeHost PRIVATE /W4 /permissive- /EHsc /bigobj)
