@@ -1,6 +1,12 @@
 #ifndef HostExe
   #define HostExe SourcePath + "..\build\Release\RobloxShadeHost.exe"
 #endif
+#ifndef EffectPackagesUrl
+  #define EffectPackagesUrl "https://raw.githubusercontent.com/crosire/reshade-shaders/list/EffectPackages.ini"
+#endif
+#ifndef PresetsBaseUrl
+  #define PresetsBaseUrl "https://raw.githubusercontent.com/OMouta/RobloxShadeHost/main/presets"
+#endif
 #ifndef AppVersion
   #define AppVersion "0.1.1"
 #endif
@@ -28,6 +34,7 @@ OutputDir=..\build\installer
 OutputBaseFilename=RobloxShadeHost-Setup
 Compression=lzma2
 SolidCompression=yes
+ArchiveExtraction=full
 CloseApplications=yes
 CloseApplicationsFilter=RobloxShadeHost.exe
 RestartApplications=no
@@ -44,6 +51,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "host"; Description: "RobloxShadeHost (required)"; Types: recommended custom; Flags: fixed
 Name: "reshade"; Description: "ReShade with full add-on support"; Types: recommended
 Name: "reshade\dlss5"; Description: "DLSS5 add-on - RenoDX / clshortfuse and NVIDIA"; Flags: dontinheritcheck
+Name: "reshade\presets"; Description: "RobloxShadeHost presets"; Types: recommended; Flags: dontinheritcheck
 
 [Files]
 Source: "{#HostExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -52,6 +60,9 @@ Source: "CREDITS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{tmp}\reshade-stage\dxgi.dll"; DestDir: "{app}"; Components: reshade; Flags: external ignoreversion; Check: ReShadeReady
 Source: "{tmp}\reshade-stage\ReShade.ini"; DestDir: "{app}"; Components: reshade; Flags: external onlyifdoesntexist uninsneveruninstall; Check: ReShadeReady
 Source: "{tmp}\ReShade-LICENSE.txt"; DestDir: "{app}"; Components: reshade; Flags: external ignoreversion; Check: ReShadeReady
+Source: "{tmp}\effects-stage\reshade-shaders\*"; DestDir: "{app}\reshade-shaders"; Components: reshade; Flags: external ignoreversion recursesubdirs createallsubdirs; Check: EffectsReady
+Source: "{tmp}\EffectPackages.ini"; DestDir: "{app}"; Components: reshade; Flags: external ignoreversion; Check: EffectsReady
+Source: "{tmp}\presets\*.ini"; DestDir: "{app}\presets"; Components: reshade\presets; Flags: external onlyifdoesntexist uninsneveruninstall; Check: PresetsReady
 Source: "{tmp}\nvngx_dlssnr.dll"; DestDir: "{app}"; ExternalSize: 165840496; Components: reshade\dlss5; Flags: external ignoreversion; Check: DLSSReady
 Source: "{tmp}\renodx-dlss.addon64"; DestDir: "{app}"; ExternalSize: 2624512; Components: reshade\dlss5; Flags: external ignoreversion; Check: DLSSReady
 
@@ -68,6 +79,7 @@ var
   AcceptLicense: TNewCheckBox;
   ReShadeVersion, ReShadeUrl, SkippedComponents: String;
   ReShadeInstalled, DLSSDownloaded: Boolean;
+  EffectsDownloaded, PresetsDownloaded: Boolean;
 
 function ReShadeReady: Boolean;
 begin
@@ -79,12 +91,24 @@ begin
   Result := ReShadeInstalled and DLSSDownloaded;
 end;
 
+function EffectsReady: Boolean;
+begin
+  Result := ReShadeInstalled and EffectsDownloaded;
+end;
+
+function PresetsReady: Boolean;
+begin
+  Result := EffectsReady and PresetsDownloaded;
+end;
+
 procedure Download(const Url, FileName, Hash: String);
 begin
   DownloadPage.Clear;
   DownloadPage.Add(Url, FileName, Hash);
   DownloadPage.Download;
 end;
+
+#include "Effects.iss"
 
 procedure LoadReShadeLicense;
 var
@@ -233,12 +257,16 @@ begin
   try
     try
       PrepareReShade;
+      PrepareEffects;
+      if WizardIsComponentSelected('reshade\presets') then
+        PreparePresets;
     except
       Result := GetExceptionMessage;
       exit;
     end;
     if WizardIsComponentSelected('reshade\dlss5') then begin
       try
+        DownloadPage.SetText('Downloading DLSS5', 'Downloading the optional DLSS5 add-on.');
         Download('{#DownloadManifestUrl}', 'downloads.ini', '');
         if GetIniString('dlss5', 'enabled', '0', ExpandConstant('{tmp}\downloads.ini')) <> '1' then
           RaiseException('DLSS5 downloads are currently disabled.');
