@@ -1,6 +1,14 @@
 # RobloxShadeHost
 
-Use ReShade with Roblox by installing it on RobloxShadeHost, then running the host alongside Roblox.
+Use ReShade with Roblox. Install ReShade on RobloxShadeHost, run the host next to Roblox, and the effects draw over your game.
+
+## Read this first
+
+**How do I get it?** Download [RobloxShadeHost-Setup.exe](https://github.com/OMouta/RobloxShadeHost/releases/latest/download/RobloxShadeHost-Setup.exe) and run it like any other installer. It downloads ReShade and its effects for you. Keep the folder it suggests, or pick any folder of your own. Do not install it inside the Roblox folder, and do not install ReShade onto Roblox itself. The host is a separate program that runs beside Roblox and never touches Roblox's files.
+
+**Will it slow my game down?** Yes. This is experimental and lowers your FPS, because the host copies Roblox's picture every frame and draws the effects on top. The depth estimation add-on costs even more FPS, so leave it unchecked in the installer unless you want effects like depth of field or ambient occlusion.
+
+**How do I open the ReShade menu?** While you play, your keyboard and mouse go to Roblox. Press **Ctrl+Home** to hand them to RobloxShadeHost instead. A small badge at the bottom of the screen confirms it. Now press **Home** to open ReShade, pick a preset or change effects, and press **Home** again to close it. Press **Ctrl+Home** once more to go back to playing. Your effects stay on.
 
 ## Download and set up
 
