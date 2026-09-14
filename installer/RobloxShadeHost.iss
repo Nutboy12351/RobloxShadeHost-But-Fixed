@@ -54,7 +54,7 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 Name: "host"; Description: "RobloxShadeHost (required)"; Types: recommended custom; Flags: fixed
 Name: "reshade"; Description: "ReShade with full add-on support"; Types: recommended
 Name: "reshade\dlss5"; Description: "DLSS5 add-on - RenoDX / clshortfuse and NVIDIA"; Flags: dontinheritcheck
-Name: "reshade\depth"; Description: "Depth estimation add-on - Depth Anything V2, ONNX Runtime and DirectML"; Flags: dontinheritcheck
+Name: "reshade\depth"; Description: "Depth estimation add-on, EXPERIMENTAL: lowers FPS, not needed for DLSS5 - Depth Anything V2, ONNX Runtime and DirectML"; Flags: dontinheritcheck
 Name: "reshade\presets"; Description: "RobloxShadeHost presets"; Types: recommended; Flags: dontinheritcheck
 
 [Files]
