@@ -207,6 +207,31 @@ begin
   end;
 end;
 
+// The ReShade installer writes .\reshade-shaders\Shaders\**\** as the search paths. ReShade treats a
+// trailing ** as "search recursively" and then looks for a folder literally named **, so no effect
+// or texture is found. Drop the extra suffix and leave every other line, including the BOM, alone.
+procedure FixSearchPaths(const FileName: String);
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+  Line: String;
+  Changed: Boolean;
+begin
+  if not LoadStringsFromFile(FileName, Lines) then
+    RaiseException('Could not read ReShade.ini.');
+  Changed := False;
+  for Index := 0 to GetArrayLength(Lines) - 1 do begin
+    Line := Lines[Index];
+    if ((Pos('EffectSearchPaths=', Line) = 1) or (Pos('TextureSearchPaths=', Line) = 1)) and
+      (Copy(Line, Length(Line) - 5, 6) = '\**\**') then begin
+      Lines[Index] := Copy(Line, 1, Length(Line) - 3);
+      Changed := True;
+    end;
+  end;
+  if Changed and not SaveStringsToUTF8File(FileName, Lines, False) then
+    RaiseException('Could not update ReShade.ini.');
+end;
+
 procedure PrepareReShade;
 var
   Stage, Parameters: String;
@@ -233,6 +258,7 @@ begin
   if (ExitCode <> 0) or not FileExists(Stage + '\dxgi.dll') or
     not FileExists(Stage + '\ReShade.ini') then
     RaiseException('ReShade installation failed. Go back to retry or deselect ReShade.');
+  FixSearchPaths(Stage + '\ReShade.ini');
   ReShadeInstalled := True;
 end;
 
@@ -323,6 +349,14 @@ begin
   finally
     DownloadPage.Hide;
   end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  // An existing ReShade.ini is kept as is, so repair one written by an earlier installer.
+  if (CurStep = ssInstall) and WizardIsComponentSelected('reshade') and
+    FileExists(ExpandConstant('{app}\ReShade.ini')) then
+    FixSearchPaths(ExpandConstant('{app}\ReShade.ini'));
 end;
 
 procedure CurPageChanged(CurPageID: Integer);

@@ -64,10 +64,17 @@ Assert-File $reshade 'reshade-shaders/Shaders/qUINT/qUINT_common.fxh'
 if (-not (Get-ChildItem "$reshade/reshade-shaders/Textures" -Filter *.png -Recurse | Select-Object -First 1)) {
     throw 'No textures were installed.'
 }
+function Assert-SearchPaths([string]$Ini) {
+    if ($Ini -notmatch '(?m)^EffectSearchPaths=\.\\reshade-shaders\\Shaders\\\*\*\r?$' -or
+        $Ini -notmatch '(?m)^TextureSearchPaths=\.\\reshade-shaders\\Textures\\\*\*\r?$') {
+        throw 'ReShade.ini does not have the expected effect search paths.'
+    }
+}
+
 $reshadeIni = Get-Content "$reshade/ReShade.ini" -Raw
-if ($reshadeIni -notmatch '(?m)^EffectSearchPaths=.*\.\\reshade-shaders\\Shaders\\\*\*' -or
-    $reshadeIni -notmatch '(?m)^TextureSearchPaths=.*\.\\reshade-shaders\\Textures\\\*\*') {
-    throw 'ReShade.ini is missing the effect search paths.'
+Assert-SearchPaths $reshadeIni
+if (-not (Compare-Object ([IO.File]::ReadAllBytes("$reshade/ReShade.ini")[0..2]) @(0xEF, 0xBB, 0xBF)) -eq $null) {
+    throw 'ReShade.ini lost its byte order mark.'
 }
 if (([regex]::Matches($reshadeIni, '(?m)^\[GENERAL\]')).Count -ne 1) {
     throw 'ReShade.ini has a duplicated GENERAL section.'
@@ -87,6 +94,18 @@ Set-Content "$reshade/presets/GenericPreset1.ini" 'Techniques=Edited@Edited.fx'
 $null = Invoke-TestInstaller $setup 'reshade' 'host,reshade,reshade\presets'
 if ((Get-FileHash "$reshade/ReShade.ini").Hash -ne $originalHash) {
     throw 'Reinstall changed the existing ReShade configuration.'
+}
+
+# An install from the earlier installer kept ReShade's doubled search paths. Reinstalling repairs
+# those lines and nothing else.
+$brokenIni = $reshadeIni -replace '(?m)^((?:Effect|Texture)SearchPaths=.*\\\*\*)(?=\r?$)', '$1\**'
+$brokenIni += "`n[InstallerTest]`nPreserve=1`n"
+[IO.File]::WriteAllText("$reshade/ReShade.ini", $brokenIni.TrimStart([char]0xFEFF), [Text.UTF8Encoding]::new($true))
+$null = Invoke-TestInstaller $setup 'reshade' 'host,reshade,reshade\presets'
+$repairedIni = Get-Content "$reshade/ReShade.ini" -Raw
+Assert-SearchPaths $repairedIni
+if ($repairedIni -notmatch '(?m)^Preserve=1' -or ([regex]::Matches($repairedIni, '(?m)^\[GENERAL\]')).Count -ne 1) {
+    throw 'Repairing the search paths did not preserve the rest of ReShade.ini.'
 }
 if ((Get-Content "$reshade/presets/GenericPreset1.ini" -Raw) -notmatch 'Edited') {
     throw 'Reinstall overwrote an edited preset.'
