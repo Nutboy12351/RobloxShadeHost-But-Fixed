@@ -3,6 +3,7 @@
 #include "../state.h"
 
 #include <reshade.hpp>
+#include <d3d12.h>
 #include <d3dcompiler.h>
 
 #include <algorithm>
@@ -81,6 +82,14 @@ struct Depth
     winrt::com_ptr<ID3D11ShaderResourceView> view;
     std::vector<reshade::api::effect_runtime*> runtimes;
 
+    // ReShade wraps every D3D12 device created in this process in a proxy, and DirectML fails on the
+    // proxy with DXGI_ERROR_DEVICE_REMOVED. The worker creates the device, ReShade reports the native
+    // one through init_device, and the model runs on that. The proxy is kept so ReShade releases the
+    // native device last.
+    winrt::com_ptr<ID3D12Device> d3d12Proxy;
+    winrt::com_ptr<ID3D12Device> d3d12;
+    std::atomic<ID3D12Device*> nativeD3D12 = nullptr;
+
     // The worker owns the model. It only reads width, height and input while busy is set, and the main
     // thread only touches them while it is clear.
     std::thread worker;
@@ -136,6 +145,25 @@ void OnReloadedEffects(reshade::api::effect_runtime* runtime)
         Bind(runtime);
 }
 
+void OnInitDevice(reshade::api::device* device)
+{
+    if (device->get_api() == reshade::api::device_api::d3d12)
+        d.nativeD3D12 = reinterpret_cast<ID3D12Device*>(device->get_native());
+}
+
+// Runs on the worker thread, where init_device fires before D3D12CreateDevice returns.
+void CreateD3D12Device()
+{
+    d.nativeD3D12 = nullptr;
+    if (FAILED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(d.d3d12Proxy.put()))))
+        throw std::runtime_error("DirectX 12 is unavailable on this GPU.");
+    // Without ReShade's hooks there is no proxy and the created device is the native one.
+    if (ID3D12Device* native = d.nativeD3D12)
+        d.d3d12.copy_from(native);
+    else
+        d.d3d12 = d.d3d12Proxy;
+}
+
 void Worker()
 {
     std::unique_ptr<DepthModel> model;
@@ -150,8 +178,10 @@ void Worker()
             if (d.width != loadedWidth || d.height != loadedHeight)
             {
                 model.reset();
+                if (!d.d3d12)
+                    CreateD3D12Device();
                 model = std::make_unique<DepthModel>();
-                model->Load(d.directory, kModelFile, d.width, d.height);
+                model->Load(d.directory, kModelFile, d.width, d.height, d.d3d12.get());
                 loadedWidth = d.width;
                 loadedHeight = d.height;
                 std::printf("Depth model ready (%dx%d). Depth-based effects use an estimate, not Roblox's depth buffer.\n", d.width, d.height);
@@ -301,6 +331,7 @@ bool InitDepth()
     reshade::register_event<reshade::addon_event::init_effect_runtime>(OnInitRuntime);
     reshade::register_event<reshade::addon_event::destroy_effect_runtime>(OnDestroyRuntime);
     reshade::register_event<reshade::addon_event::reshade_reloaded_effects>(OnReloadedEffects);
+    reshade::register_event<reshade::addon_event::init_device>(OnInitDevice);
 
     try
     {
@@ -381,6 +412,8 @@ void ShutdownDepth()
         SetEvent(d.inputReady);
         d.worker.join();
     }
+    d.d3d12 = nullptr;
+    d.d3d12Proxy = nullptr;
     if (d.inputReady)
         CloseHandle(d.inputReady);
     if (d.registered)

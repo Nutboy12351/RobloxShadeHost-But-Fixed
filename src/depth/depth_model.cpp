@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <DirectXPackedVector.h>
 #include <onnxruntime_c_api.h>
+#include <dml_provider_factory.h>
 
 #include <stdexcept>
 
@@ -54,27 +55,45 @@ DepthModel::~DepthModel()
         if (env)
             api->ReleaseEnv(env);
     }
+    if (queue)
+        queue->Release();
+    if (dml)
+        dml->Release();
     if (library)
         FreeLibrary(static_cast<HMODULE>(library));
+    if (dmlLibrary)
+        FreeLibrary(static_cast<HMODULE>(dmlLibrary));
 }
 
-void DepthModel::Load(const std::wstring& directory, const std::wstring& modelFile, int width, int height)
+void DepthModel::Load(const std::wstring& directory, const std::wstring& modelFile, int width, int height, ID3D12Device* device)
 {
     // DirectML.dll is an import of onnxruntime.dll and resolves from the exe directory as well.
     library = LoadLibraryW((directory + L"onnxruntime.dll").c_str());
-    if (!library)
+    dmlLibrary = LoadLibraryW((directory + L"DirectML.dll").c_str());
+    if (!library || !dmlLibrary)
         throw std::runtime_error("onnxruntime.dll or DirectML.dll could not be loaded.");
 
     using GetApiBase = const OrtApiBase*(ORT_API_CALL*)();
     auto getApiBase = reinterpret_cast<GetApiBase>(GetProcAddress(static_cast<HMODULE>(library), "OrtGetApiBase"));
-    using AppendDml = OrtStatus*(ORT_API_CALL*)(OrtSessionOptions*, int);
-    auto appendDml = reinterpret_cast<AppendDml>(GetProcAddress(static_cast<HMODULE>(library), "OrtSessionOptionsAppendExecutionProvider_DML"));
-    if (!getApiBase || !appendDml)
-        throw std::runtime_error("onnxruntime.dll is not the DirectML build.");
+    using CreateDml = HRESULT(WINAPI*)(ID3D12Device*, DML_CREATE_DEVICE_FLAGS, REFIID, void**);
+    auto createDml = reinterpret_cast<CreateDml>(GetProcAddress(static_cast<HMODULE>(dmlLibrary), "DMLCreateDevice"));
+    if (!getApiBase || !createDml)
+        throw std::runtime_error("onnxruntime.dll or DirectML.dll is not the expected build.");
     api = getApiBase()->GetApi(ORT_API_VERSION);
     if (!api)
         throw std::runtime_error("onnxruntime.dll is older than the version this host was built for.");
     const OrtError check{ api };
+    const OrtDmlApi* dmlApi = nullptr;
+    check(api->GetExecutionProviderApi("DML", ORT_API_VERSION, reinterpret_cast<const void**>(&dmlApi)));
+
+    // Letting ONNX Runtime pick the GPU would have it call D3D12CreateDevice and get ReShade's proxy,
+    // on which DirectML fails while uploading its fused graph. Build the DirectML device and queue on
+    // the given device instead.
+    if (FAILED(createDml(device, DML_CREATE_DEVICE_FLAG_NONE, IID_PPV_ARGS(&dml))))
+        throw std::runtime_error("DirectML could not use this GPU.");
+    const D3D12_COMMAND_QUEUE_DESC queueDesc{ D3D12_COMMAND_LIST_TYPE_DIRECT };
+    if (FAILED(device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&queue))))
+        throw std::runtime_error("The GPU command queue could not be created.");
 
     check(api->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "RobloxShadeHost", &env));
     check(api->CreateSessionOptions(&options));
@@ -88,7 +107,7 @@ void DepthModel::Load(const std::wstring& directory, const std::wstring& modelFi
     check(api->AddFreeDimensionOverrideByName(options, "batch_size", 1));
     check(api->AddFreeDimensionOverrideByName(options, "height", height));
     check(api->AddFreeDimensionOverrideByName(options, "width", width));
-    check(appendDml(options, 0));
+    check(dmlApi->SessionOptionsAppendExecutionProvider_DML1(options, dml, queue));
     check(api->CreateSession(env, (directory + modelFile).c_str(), options, &session));
     check(api->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &memory));
 

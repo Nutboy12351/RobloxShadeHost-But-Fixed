@@ -33,6 +33,7 @@ set(ONNXRUNTIME_INCLUDE "${CMAKE_BINARY_DIR}/onnxruntime/include")
 set(ONNXRUNTIME_HEADERS_URL "https://raw.githubusercontent.com/microsoft/onnxruntime/v1.24.4/include/onnxruntime/core/session")
 fetch_header("${ONNXRUNTIME_HEADERS_URL}/onnxruntime_c_api.h" 9ed0d7054a4e74249467365b25b415d36f51a44a6349e2a994a1812e4723d1e2 "${ONNXRUNTIME_INCLUDE}/onnxruntime_c_api.h")
 fetch_header("${ONNXRUNTIME_HEADERS_URL}/onnxruntime_ep_c_api.h" e94ac3490697bdb107844fa9d403952ee7136134132a057eae5c1207b57ce352 "${ONNXRUNTIME_INCLUDE}/onnxruntime_ep_c_api.h")
+fetch_header("https://raw.githubusercontent.com/microsoft/onnxruntime/v1.24.4/include/onnxruntime/core/providers/dml/dml_provider_factory.h" 893ddb645545bddad8c3f24bb768e97651c9ce45ec22076b435439889e4228c8 "${ONNXRUNTIME_INCLUDE}/dml_provider_factory.h")
 
 add_executable(RobloxShadeHost
     src/main.cpp
@@ -46,7 +47,7 @@ target_include_directories(RobloxShadeHost PRIVATE "${RESHADE_INCLUDE}" "${ONNXR
 target_compile_definitions(RobloxShadeHost PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_definitions(RobloxShadeHost PRIVATE ROBLOX_SHADE_HOST_VERSION="${PROJECT_VERSION}")
 target_compile_options(RobloxShadeHost PRIVATE /W4 /permissive- /EHsc /bigobj)
-target_link_libraries(RobloxShadeHost PRIVATE d3d11 d3dcompiler dxgi dwmapi windowsapp gdi32)
+target_link_libraries(RobloxShadeHost PRIVATE d3d11 d3d12 d3dcompiler dxgi dwmapi windowsapp gdi32)
 
 find_program(INNO_SETUP_COMPILER ISCC
     HINTS "$ENV{LOCALAPPDATA}/Programs/Inno Setup 6" "C:/Program Files (x86)/Inno Setup 6")
