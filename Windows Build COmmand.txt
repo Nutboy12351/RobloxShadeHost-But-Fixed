@@ -1,0 +1,45 @@
+RobloxShadeHost Windows Build Commands
+
+Run these commands from a Visual Studio 2022 Developer PowerShell in the repository folder.
+Install Visual Studio 2022 with Desktop development with C++, CMake 3.20 or newer, and Inno Setup 6 first.
+
+1. Configure the x64 Release build:
+
+cmake -S . -B build -A x64 -DBUILD_TESTING=ON
+
+2. Build the application:
+
+cmake --build build --config Release --parallel
+
+3. Run the tests:
+
+ctest --test-dir build -C Release --output-on-failure
+
+4. Build the installer EXE:
+
+cmake --build build --config Release --target installer
+
+The installer is created at:
+
+build\installer\RobloxShadeHost-Setup.exe
+
+The application EXE is created at:
+
+build\Release\RobloxShadeHost.exe
+
+GitHub Codespaces / Linux
+
+This project uses Windows-only APIs (D3D11, D3D12, DirectML, and Inno Setup), so it cannot build the Windows EXE or installer natively inside a Linux Codespace. Do not use -A x64 with the Linux Unix Makefiles generator; that option is for Visual Studio on Windows.
+
+To build it on GitHub's Windows runner from a Codespace, authenticate with GitHub CLI and run:
+
+# Push the repository first so GitHub has .github/workflows/build.yml.
+gh repo set-default Nutboy12351/RobloxShadeHost-But-Fixed
+gh workflow run build.yml --ref main
+gh run watch
+
+After the workflow finishes, download the Windows build artifact with:
+
+gh run download --name RobloxShadeHost-windows-x64
+
+You can also open the repository's Actions tab, select Build and release, choose Run workflow, and download RobloxShadeHost-windows-x64 from the completed run.

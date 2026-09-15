@@ -100,7 +100,7 @@ void DepthModel::Load(const std::wstring& directory, const std::wstring& modelFi
     // DirectML requires sequential execution without memory patterns.
     check(api->SetSessionExecutionMode(options, ORT_SEQUENTIAL));
     check(api->DisableMemPattern(options));
-    check(api->SetSessionGraphOptimizationLevel(options, ORT_ENABLE_ALL));
+    check(api->SetSessionGraphOptimizationLevel(options, ORT_DISABLE_ALL));
     // Otherwise idle worker threads spin and take CPU time from Roblox.
     check(api->AddSessionConfigEntry(options, "session.intra_op.allow_spinning", "0"));
     // DirectML compiles the graph for fixed shapes. Left dynamic, the model runs many times slower.
