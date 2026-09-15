@@ -24,10 +24,10 @@ LRESULT CALLBACK IndicatorWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
         const UINT dpi = GetDpiForWindow(hwnd);
         const int radius = MulDiv(10, dpi, 96);
         HRGN region = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1, radius, radius);
-        HBRUSH background = CreateSolidBrush(RGB(24, 28, 34));
+        HBRUSH background = CreateSolidBrush(g.indicatorBackground);
         FillRgn(dc, region, background);
         DeleteObject(background);
-        HBRUSH accent = CreateSolidBrush(RGB(83, 190, 156));
+        HBRUSH accent = CreateSolidBrush(g.indicatorAccent);
         RECT accentRect{ rect.left, rect.top, rect.left + MulDiv(4, dpi, 96), rect.bottom };
         SelectClipRgn(dc, region);
         FillRect(dc, &accentRect, accent);
@@ -40,7 +40,7 @@ LRESULT CALLBACK IndicatorWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
                                  DEFAULT_PITCH, L"Segoe UI");
         HGDIOBJ previous = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(235, 242, 240));
+        SetTextColor(dc, g.indicatorTextColor);
         DrawTextW(dc, g.indicatorText.c_str(), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
         SelectObject(dc, previous);
         DeleteObject(font);

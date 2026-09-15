@@ -26,6 +26,13 @@ struct State
     HWND indicator = nullptr;
     std::wstring inputHotkey = L"Ctrl+Home";
     std::wstring indicatorText;
+    std::wstring consoleTitle = L"RobloxShadeHost";
+    std::wstring consoleName = L"RobloxShadeHost";
+    std::wstring consoleVersion;
+    COLORREF consoleTextColor = RGB(220, 230, 235);
+    COLORREF indicatorBackground = RGB(24, 28, 34);
+    COLORREF indicatorTextColor = RGB(235, 242, 240);
+    COLORREF indicatorAccent = RGB(83, 190, 156);
     bool editMode = false;
     bool overlayVisible = false;
     RECT overlayRect{};

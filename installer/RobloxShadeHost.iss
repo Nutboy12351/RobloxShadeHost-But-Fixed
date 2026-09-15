@@ -60,6 +60,7 @@ Name: "reshade\presets"; Description: "RobloxShadeHost presets"; Types: recommen
 [Files]
 Source: "{#HostExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\RobloxShadeHost.ini"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "CREDITS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{tmp}\reshade-stage\dxgi.dll"; DestDir: "{app}"; Components: reshade; Flags: external ignoreversion; Check: ReShadeReady
 Source: "{tmp}\reshade-stage\ReShade.ini"; DestDir: "{app}"; Components: reshade; Flags: external onlyifdoesntexist uninsneveruninstall; Check: ReShadeReady

@@ -15,9 +15,31 @@ State g;
 
 namespace
 {
+WORD ConsoleColorAttribute(COLORREF color)
+{
+    WORD attribute = 0;
+    if (GetRValue(color) >= 96)
+        attribute |= FOREGROUND_RED;
+    if (GetGValue(color) >= 96)
+        attribute |= FOREGROUND_GREEN;
+    if (GetBValue(color) >= 96)
+        attribute |= FOREGROUND_BLUE;
+    if (GetRValue(color) >= 192 || GetGValue(color) >= 192 || GetBValue(color) >= 192)
+        attribute |= FOREGROUND_INTENSITY;
+    return attribute ? attribute : FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+}
+
 int Run()
 {
     const Hotkey inputHotkey = LoadInputHotkey();
+    SetConsoleTitleW(g.consoleTitle.c_str());
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), ConsoleColorAttribute(g.consoleTextColor));
+    std::puts(R"(  ____       _     _            ____  _               _      _   _           _
+ |  _ \ ___ | |__ | | _____  __/ ___|| |__   __ _  __| | ___| | | | ___  ___| |_
+ | |_) / _ \| '_ \| |/ _ \ \/ /\___ \| '_ \ / _` |/ _` |/ _ \ |_| |/ _ \/ __| __|
+ |  _ < (_) | |_) | | (_) >  <  ___) | | | | (_| | (_| |  __/  _  | (_) \__ \ |_
+ |_| \_\___/|_.__/|_|\___/_/\_\|____/|_| |_|\__,_|\__,_|\___|_| |_\___/|___/\__|
+)");
     if (!GraphicsCaptureSession::IsSupported())
     {
         std::puts("Windows Graphics Capture is not supported on this system.");
@@ -38,6 +60,8 @@ int Run()
     CreateDevice();
     InitDepth();
 
+    const std::wstring version = g.consoleVersion.empty() ? L"v" + std::wstring(ROBLOX_SHADE_HOST_VERSION) : g.consoleVersion;
+    std::printf("%ls %ls\n\n", g.consoleName.c_str(), version.c_str());
     std::puts("Install ReShade on this exe (DirectX 10/11/12).\n"
               "Waiting for Roblox...");
     std::printf("%ls: toggle input capture. ReShade keeps its own menu and effect shortcuts.\n", g.inputHotkey.c_str());
@@ -111,13 +135,6 @@ int Run()
 
 int main()
 {
-    std::puts(R"(  ____       _     _            ____  _               _      _   _           _
- |  _ \ ___ | |__ | | _____  __/ ___|| |__   __ _  __| | ___| | | | ___  ___| |_
- | |_) / _ \| '_ \| |/ _ \ \/ /\___ \| '_ \ / _` |/ _` |/ _ \ |_| |/ _ \/ __| __|
- |  _ < (_) | |_) | | (_) >  <  ___) | | | | (_| | (_| |  __/  _  | (_) \__ \ |_
- |_| \_\___/|_.__/|_|\___/_/\_\|____/|_| |_|\__,_|\__,_|\___|_| |_|\___/|___/\__|
-)");
-    std::printf("v%s\n\n", ROBLOX_SHADE_HOST_VERSION);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     winrt::init_apartment(winrt::apartment_type::multi_threaded);
     try

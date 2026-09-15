@@ -2,6 +2,6 @@
 
 #include "hotkey.h"
 
-// Reads ToggleKey from RobloxShadeHost.ini beside the exe, creating the file with the default on first run.
-// Shows an error and throws when the value cannot be parsed.
+// Reads RobloxShadeHost.ini beside the exe, creating it with defaults on first run.
+// Shows an error and throws when the hotkey cannot be parsed.
 Hotkey LoadInputHotkey();

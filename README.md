@@ -94,6 +94,25 @@ Names are case-insensitive. Use a shortcut different from ReShade's menu and eff
 
 The shortcut is reserved while the host is running. Exit the host to free it for other applications.
 
+### Console and indicator customization
+
+The installer places `RobloxShadeHost.ini` beside the EXE. Manual installations create it on first launch. You can customize the console title, displayed name and version, console text color, and the input-capture indicator:
+
+```ini
+[Console]
+Title=My Roblox Effects Host
+Name=My Roblox Effects Host
+Version=vCustom
+TextColor=DCE6EB
+
+[Indicator]
+BackgroundColor=181C22
+TextColor=EBF2F0
+AccentColor=53BE9C
+```
+
+Colors are six-digit hexadecimal RGB values, with or without a leading `#`. Leave `Console.Version` empty to display the built-in application version. Restart the host after editing the file.
+
 ## Everyday use
 
 - Keep the host running while you play. Its console window shows capture status and errors; you can minimize it.
