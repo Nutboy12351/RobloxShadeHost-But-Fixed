@@ -29,6 +29,14 @@ WORD ConsoleColorAttribute(COLORREF color)
     return attribute ? attribute : FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
 }
 
+std::wstring BuiltInVersion()
+{
+    std::wstring version = L"v";
+    for (const char* value = ROBLOX_SHADE_HOST_VERSION; *value; ++value)
+        version.push_back(static_cast<wchar_t>(*value));
+    return version;
+}
+
 int Run()
 {
     const Hotkey inputHotkey = LoadInputHotkey();
@@ -60,7 +68,7 @@ int Run()
     CreateDevice();
     InitDepth();
 
-    const std::wstring version = g.consoleVersion.empty() ? L"v" + std::wstring(ROBLOX_SHADE_HOST_VERSION) : g.consoleVersion;
+    const std::wstring version = g.consoleVersion.empty() ? BuiltInVersion() : g.consoleVersion;
     std::printf("%ls %ls\n\n", g.consoleName.c_str(), version.c_str());
     std::puts("Install ReShade on this exe (DirectX 10/11/12).\n"
               "Waiting for Roblox...");
