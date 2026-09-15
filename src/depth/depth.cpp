@@ -190,7 +190,7 @@ void Worker()
         }
         catch (const std::exception& e)
         {
-            std::printf("Depth estimation failed: %s\n", e.what());
+            std::printf("Depth estimation disabled after GPU initialization failed: %s\n", e.what());
             d.failed = true;
         }
         d.resultReady = true;

@@ -5,6 +5,7 @@
 #include <onnxruntime_c_api.h>
 #include <dml_provider_factory.h>
 
+#include <cstdio>
 #include <stdexcept>
 
 namespace
@@ -107,8 +108,25 @@ void DepthModel::Load(const std::wstring& directory, const std::wstring& modelFi
     check(api->AddFreeDimensionOverrideByName(options, "batch_size", 1));
     check(api->AddFreeDimensionOverrideByName(options, "height", height));
     check(api->AddFreeDimensionOverrideByName(options, "width", width));
-    check(dmlApi->SessionOptionsAppendExecutionProvider_DML1(options, dml, queue));
-    check(api->CreateSession(env, (directory + modelFile).c_str(), options, &session));
+    OrtStatus* status = dmlApi->SessionOptionsAppendExecutionProvider_DML1(options, dml, queue);
+    if (!status)
+        status = api->CreateSession(env, (directory + modelFile).c_str(), options, &session);
+    if (status)
+    {
+        api->ReleaseStatus(status);
+        api->ReleaseSessionOptions(options);
+        options = nullptr;
+        std::puts("DirectML depth session failed; using the CPU execution provider instead.");
+        check(api->CreateSessionOptions(&options));
+        check(api->SetSessionExecutionMode(options, ORT_SEQUENTIAL));
+        check(api->DisableMemPattern(options));
+        check(api->SetSessionGraphOptimizationLevel(options, ORT_DISABLE_ALL));
+        check(api->AddSessionConfigEntry(options, "session.intra_op.allow_spinning", "0"));
+        check(api->AddFreeDimensionOverrideByName(options, "batch_size", 1));
+        check(api->AddFreeDimensionOverrideByName(options, "height", height));
+        check(api->AddFreeDimensionOverrideByName(options, "width", width));
+        check(api->CreateSession(env, (directory + modelFile).c_str(), options, &session));
+    }
     check(api->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &memory));
 
     OrtAllocator* allocator = nullptr;

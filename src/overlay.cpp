@@ -21,16 +21,27 @@ LRESULT CALLBACK IndicatorWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
         HDC dc = BeginPaint(hwnd, &paint);
         RECT rect{};
         GetClientRect(hwnd, &rect);
-        HBRUSH background = CreateSolidBrush(RGB(30, 30, 30));
-        FillRect(dc, &rect, background);
+        const UINT dpi = GetDpiForWindow(hwnd);
+        const int radius = MulDiv(10, dpi, 96);
+        HRGN region = CreateRoundRectRgn(rect.left, rect.top, rect.right + 1, rect.bottom + 1, radius, radius);
+        HBRUSH background = CreateSolidBrush(RGB(24, 28, 34));
+        FillRgn(dc, region, background);
         DeleteObject(background);
-        HFONT font = CreateFontW(-MulDiv(14, GetDpiForWindow(hwnd), 96), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
+        HBRUSH accent = CreateSolidBrush(RGB(83, 190, 156));
+        RECT accentRect{ rect.left, rect.top, rect.left + MulDiv(4, dpi, 96), rect.bottom };
+        SelectClipRgn(dc, region);
+        FillRect(dc, &accentRect, accent);
+        SelectClipRgn(dc, nullptr);
+        DeleteObject(accent);
+        DeleteObject(region);
+        InflateRect(&rect, -MulDiv(16, dpi, 96), 0);
+        HFONT font = CreateFontW(-MulDiv(13, dpi, 96), 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE,
                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  DEFAULT_PITCH, L"Segoe UI");
         HGDIOBJ previous = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(255, 218, 128));
-        DrawTextW(dc, g.indicatorText.c_str(), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SetTextColor(dc, RGB(235, 242, 240));
+        DrawTextW(dc, g.indicatorText.c_str(), -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
         SelectObject(dc, previous);
         DeleteObject(font);
         EndPaint(hwnd, &paint);
