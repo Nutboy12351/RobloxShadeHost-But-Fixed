@@ -2,6 +2,9 @@
 
 Use ReShade with Roblox. Install ReShade on RobloxShadeHost, run the host next to Roblox, and the effects draw over your game.
 
+> [!WARNING]
+> DLSS5 can break with NVIDEA Driver updates, you will need to wait for a nee update from us for it to start working again.
+
 ## Read this first
 
 **How do I get it?** Download [RobloxShadeHost-Setup.exe](https://github.com/OMouta/RobloxShadeHost/releases/latest/download/RobloxShadeHost-Setup.exe) and run it like any other installer. It downloads ReShade and its effects for you. Keep the folder it suggests, or pick any folder of your own. Do not install it inside the Roblox folder, and do not install ReShade onto Roblox itself. The host is a separate program that runs beside Roblox and never touches Roblox's files.
